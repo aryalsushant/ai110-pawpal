@@ -49,6 +49,20 @@ Agent Mode generated the interval-conversion helpers `_to_minutes` and `_to_hhmm
 
 For urgency ranking, the prompt was: "Write a method that scores each incomplete task by priority, how many days overdue it is, and how frequently it recurs. Return tasks sorted from highest to lowest urgency." Agent Mode produced the scoring formula and the sort. The overdue penalty was uncapped in the initial version. A cap of 10 was added manually so a task that is 30 days overdue does not dominate the ranking to the point where all other context is lost.
 
+## UI
+
+The app uses a wide layout with a persistent sidebar and five tabs.
+
+Sidebar. Owner setup and pet management live here. Each pet shows a live done/total task count inside a bordered card. Adding a pet triggers a toast notification without clearing the form.
+
+Tabs.
+
+- Today's Schedule. Four st.metric cards at the top show pet count, tasks today, pending count, and completed count. Conflict warnings appear as yellow banners directly below the metrics. The schedule renders as a st.dataframe with typed columns. A task selector at the bottom lets you mark any pending task complete.
+- Add Task. A bordered form with two columns. Submitting adds the task immediately and shows a toast confirmation.
+- Filter Tasks. Dropdowns for pet name and completion status filter the full task list. Result count shows below the table.
+- Urgency Ranking. Tasks ranked by weighted score. The Score column uses st.column_config.ProgressColumn so each row shows a visual bar from 0 to 14 (the maximum possible score).
+- Find Available Slot. Returns the earliest free gap in a pet's today schedule that fits the requested duration. Shows the pet's existing tasks as context so you can see why the slot was picked.
+
 ## Setup
 
 ```
