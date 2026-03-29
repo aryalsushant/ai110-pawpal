@@ -112,6 +112,8 @@ The human architect's job is to hold the system's rules and review each AI sugge
 
 I added a shared `ui_helpers.py` module with four formatting functions: `task_emoji` maps description keywords to emojis (🦮 for walks, 🍖 for feeding, 💊 for medication, ✂️ for grooming, 🏥 for vet appointments, 🎾 for play), `species_emoji` maps pet species to icons, `priority_badge_html` returns a color-coded HTML span (red for high, orange for medium, green for low), and `status_badge_html` returns ✅ Done or ⏳ Pending badges. In `main.py`, I replaced the plain print loop with `tabulate` using the `rounded_outline` style and `colorama` for priority colors (red for high, yellow for medium, green for low) and cyan for pending status. In `app.py`, I replaced every `st.table()` call with a custom `html_table()` function rendered via `st.markdown(unsafe_allow_html=True)` so priority and status columns show colored badges instead of plain text.
 
+The app was later redesigned using proper Streamlit layout components. The layout switched to `wide` mode with a persistent sidebar for owner and pet setup. The main area uses five `st.tabs` to separate today's schedule, task creation, filtering, urgency ranking, and slot finding. Four `st.metric` cards replace the plain header so pet count, tasks today, pending, and completed are visible at a glance. All tables now use `st.dataframe` with `column_config` typed columns, and the urgency ranking uses `st.column_config.ProgressColumn` to show a visual bar for each task's score. `st.toast` replaces inline `st.success` calls so form state is preserved after submission.
+
 ---
 
 ## 7. Challenge 1: Advanced Algorithmic Capability
