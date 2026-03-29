@@ -108,6 +108,12 @@ The human architect's job is to hold the system's rules and review each AI sugge
 
 ---
 
-## 6. Challenge 1: Advanced Algorithmic Capability
+## 6. Challenge 4: Professional UI and Output Formatting
+
+I added a shared `ui_helpers.py` module with four formatting functions: `task_emoji` maps description keywords to emojis (🦮 for walks, 🍖 for feeding, 💊 for medication, ✂️ for grooming, 🏥 for vet appointments, 🎾 for play), `species_emoji` maps pet species to icons, `priority_badge_html` returns a color-coded HTML span (red for high, orange for medium, green for low), and `status_badge_html` returns ✅ Done or ⏳ Pending badges. In `main.py`, I replaced the plain print loop with `tabulate` using the `rounded_outline` style and `colorama` for priority colors (red for high, yellow for medium, green for low) and cyan for pending status. In `app.py`, I replaced every `st.table()` call with a custom `html_table()` function rendered via `st.markdown(unsafe_allow_html=True)` so priority and status columns show colored badges instead of plain text.
+
+---
+
+## 7. Challenge 1: Advanced Algorithmic Capability
 
 I added two advanced algorithms to the Scheduler class using Agent Mode. For the first, I prompted: "Write a method that finds the earliest available time slot for a new task given a pet's existing tasks as busy intervals." Agent Mode generated a gap-scanning loop that converts each task into a `[start, start + duration)` interval, sorts them, and advances a cursor until it finds a gap wide enough. I changed the end-of-day boundary from 1439 to 1440 minutes so tasks ending exactly at midnight are correctly rejected. For the second, I prompted: "Score each incomplete task by priority, days overdue, and recurrence frequency, then sort by urgency." The formula it produced was correct, but the overdue penalty was uncapped. I added a cap of 10 so a month-old task does not completely bury everything else in the ranking. Both methods are tested and wired into the Streamlit UI.

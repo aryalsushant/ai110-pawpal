@@ -8,6 +8,7 @@ import streamlit as st
 from datetime import date
 
 from pawpal_system import Owner, Pet, Scheduler, Task
+from ui_helpers import task_emoji, species_emoji, priority_badge_html, status_badge_html
 
 st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
 
@@ -15,12 +16,45 @@ st.title("🐾 PawPal+")
 st.caption("Smart pet care scheduling for busy owners.")
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def html_table(rows: list[dict], badge_cols: dict[str, str] = {}) -> str:
+    """Render a list of dicts as an HTML table. badge_cols maps col name to 'priority'/'status'."""
+    if not rows:
+        return ""
+    headers = list(rows[0].keys())
+    th = "".join(
+        f'<th style="padding:6px 12px;text-align:left;border-bottom:2px solid #e0e0e0;'
+        f'font-size:0.85em;color:#555;">{h}</th>'
+        for h in headers
+    )
+    body = ""
+    for i, row in enumerate(rows):
+        bg = "#fafafa" if i % 2 == 0 else "#fff"
+        tds = ""
+        for h in headers:
+            val = row[h]
+            if h == "Priority":
+                val = priority_badge_html(str(val).lower())
+            elif h == "Status":
+                val = status_badge_html(val == "Done")
+            tds += (
+                f'<td style="padding:6px 12px;border-bottom:1px solid #f0f0f0;">{val}</td>'
+            )
+        body += f'<tr style="background:{bg};">{tds}</tr>'
+    return (
+        f'<table style="width:100%;border-collapse:collapse;font-size:0.9em;">'
+        f"<thead><tr>{th}</tr></thead><tbody>{body}</tbody></table>"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Session state bootstrap
 # ---------------------------------------------------------------------------
 
 if "owner" not in st.session_state:
     st.session_state.owner = None
-
 if "scheduler" not in st.session_state:
     st.session_state.scheduler = None
 
@@ -68,11 +102,15 @@ with st.form("pet_form"):
             st.warning(f"{pet_name.strip()} is already added.")
         else:
             owner.add_pet(Pet(pet_name.strip(), species, int(age)))
-            st.success(f"Added {pet_name.strip()} the {species}.")
+            st.success(f"Added {species_emoji(species)} {pet_name.strip()} the {species}.")
 
 pets = owner.get_pets()
 if pets:
-    st.write("Your pets:", ", ".join(str(p) for p in pets))
+    pet_labels = "  ".join(
+        f"{species_emoji(p.species)} **{p.name}** ({p.species}, age {p.age})"
+        for p in pets
+    )
+    st.markdown(pet_labels)
 
 # ---------------------------------------------------------------------------
 # Add a task
@@ -98,7 +136,6 @@ else:
 
         add_task = st.form_submit_button("Add task")
         if add_task and description.strip() and task_time.strip():
-            # Validate time format
             parts = task_time.strip().split(":")
             valid_time = len(parts) == 2 and all(p.isdigit() for p in parts)
             if not valid_time:
@@ -115,7 +152,8 @@ else:
                     due_date=due_date,
                 )
                 target_pet.add_task(new_task)
-                st.success(f"Task '{description.strip()}' added for {selected_pet}.")
+                emoji = task_emoji(description.strip())
+                st.success(f"{emoji} '{description.strip()}' added for {selected_pet}.")
 
 # ---------------------------------------------------------------------------
 # Today's schedule
@@ -127,25 +165,26 @@ st.subheader("Today's Schedule")
 schedule = scheduler.get_todays_schedule()
 conflicts = scheduler.detect_conflicts()
 
-if conflicts:
-    for warning in conflicts:
-        st.warning(warning)
+for warning in conflicts:
+    st.warning(f"⚠️ {warning}")
 
 if not schedule:
     st.info("No tasks scheduled for today. Add some tasks above.")
 else:
-    rows = []
-    for task in schedule:
-        rows.append({
-            "Time": task.time,
-            "Pet": task.pet_name,
-            "Task": task.description,
-            "Duration": f"{task.duration_minutes} min",
-            "Priority": task.priority,
-            "Frequency": task.frequency,
-            "Status": "Done" if task.completed else "Pending",
-        })
-    st.table(rows)
+    rows = [
+        {
+            "":         task_emoji(t.description),
+            "Time":     t.time,
+            "Pet":      t.pet_name,
+            "Task":     t.description,
+            "Duration": f"{t.duration_minutes} min",
+            "Priority": t.priority,
+            "Freq":     t.frequency,
+            "Status":   "Done" if t.completed else "Pending",
+        }
+        for t in schedule
+    ]
+    st.markdown(html_table(rows), unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Mark tasks complete
@@ -157,12 +196,15 @@ all_pending = [t for t in scheduler.get_todays_schedule() if not t.completed]
 if not all_pending:
     st.info("No pending tasks for today.")
 else:
-    task_labels = [f"{t.time} - {t.pet_name}: {t.description}" for t in all_pending]
+    task_labels = [
+        f"{task_emoji(t.description)} {t.time} - {t.pet_name}: {t.description}"
+        for t in all_pending
+    ]
     chosen_label = st.selectbox("Select a task to complete", task_labels)
     chosen_index = task_labels.index(chosen_label)
     chosen_task = all_pending[chosen_index]
 
-    if st.button("Mark as complete"):
+    if st.button("✅ Mark as complete"):
         target_pet = next(p for p in pets if p.name == chosen_task.pet_name)
         scheduler.mark_task_complete(chosen_task, target_pet)
         if chosen_task.frequency != "once":
@@ -206,25 +248,26 @@ if not filtered_sorted:
 else:
     filter_rows = [
         {
-            "Date": str(t.due_date),
-            "Time": t.time,
-            "Pet": t.pet_name,
-            "Task": t.description,
+            "":         task_emoji(t.description),
+            "Date":     str(t.due_date),
+            "Time":     t.time,
+            "Pet":      t.pet_name,
+            "Task":     t.description,
             "Priority": t.priority,
-            "Status": "Done" if t.completed else "Pending",
+            "Status":   "Done" if t.completed else "Pending",
         }
         for t in filtered_sorted
     ]
-    st.table(filter_rows)
+    st.markdown(html_table(filter_rows), unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Urgency ranking
 # ---------------------------------------------------------------------------
 
 st.divider()
-st.subheader("Urgency Ranking")
+st.subheader("🔥 Urgency Ranking")
 st.caption(
-    "Tasks scored by priority weight + overdue penalty + frequency urgency. "
+    "Score = priority weight + overdue penalty + frequency urgency. "
     "Higher score = needs attention sooner."
 )
 
@@ -234,23 +277,24 @@ if not ranked:
 else:
     rank_rows = [
         {
-            "Score": f"{score:.1f}",
-            "Pet": task.pet_name,
-            "Task": task.description,
+            "Score":    f"{score:.1f}",
+            "":         task_emoji(task.description),
+            "Pet":      task.pet_name,
+            "Task":     task.description,
             "Priority": task.priority,
-            "Due": str(task.due_date),
-            "Frequency": task.frequency,
+            "Due":      str(task.due_date),
+            "Freq":     task.frequency,
         }
         for task, score in ranked
     ]
-    st.table(rank_rows)
+    st.markdown(html_table(rank_rows), unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Next available slot finder
 # ---------------------------------------------------------------------------
 
 st.divider()
-st.subheader("Find Next Available Slot")
+st.subheader("🕐 Find Next Available Slot")
 st.caption("Finds the earliest gap in a pet's today schedule that fits your task.")
 
 if not pets:
@@ -276,8 +320,8 @@ else:
             )
             if result:
                 st.success(
-                    f"Next available {int(slot_duration)}-minute slot for "
-                    f"{slot_pet}: {result}"
+                    f"🟢 Next available {int(slot_duration)}-minute slot for "
+                    f"{slot_pet}: **{result}**"
                 )
             else:
                 st.warning(
