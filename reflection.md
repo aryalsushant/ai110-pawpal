@@ -22,9 +22,9 @@ Scheduler: The decision-making layer. Accepts an Owner and operates on all tasks
 
 **b. Design changes**
 
-During implementation, the Scheduler gained a `mark_task_complete` method that wraps the Task's own `mark_complete`. The reason: the Scheduler is the only layer that knows about recurrence at the system level. Putting recurrence logic inside Task itself would have forced Task to know about dates and scheduling policy, mixing two responsibilities into one class.
+During implementation, the Scheduler gained a `mark_task_complete` method wrapping the Task's own `mark_complete`. The Scheduler is the only layer aware of recurrence at the system level. Putting recurrence logic inside Task itself would have forced Task to know about dates and scheduling policy, mixing two responsibilities into one class.
 
-A `due_date` field was also added to Task. The initial sketch used only a time string (HH:MM). Adding a date made it possible to filter "today's" tasks correctly and to advance daily or weekly tasks to their next occurrence.
+A `due_date` field was also added to Task. The initial sketch used only a time string (HH:MM). Adding a date made it possible to filter today's tasks correctly and to advance daily or weekly tasks to their next occurrence.
 
 ---
 
@@ -52,15 +52,21 @@ This tradeoff is reasonable for an MVP. Most pet care tasks are short and loosel
 
 **a. How you used AI**
 
-AI was used for three things: brainstorming the class structure, generating the Mermaid UML diagram syntax, and suggesting test cases for edge scenarios like an owner with no pets or two tasks at identical times.
+Three Copilot features drove most of the work:
 
-The most useful prompts were specific. Asking "how should Scheduler retrieve tasks from Owner's pets?" produced a clear pattern. Asking "generate a pet care app" produced too much at once.
+Agent Mode was used to flesh out the full class implementations in pawpal_system.py after the skeleton was in place. It handled writing all method bodies at once, which was faster than doing each method in isolation.
+
+Inline Chat was used on specific algorithmic methods. For the `sort_by_time` method, the prompt was: "how do I sort a list of objects by a HH:MM string attribute?" The suggestion to use a lambda with `sorted()` was correct and kept.
+
+The Generate tests smart action was used to draft the initial test stubs for `test_pawpal.py`. The generated tests covered happy paths well but missed edge cases, so additional tests were written by hand for things like an owner with no pets and weekly recurrence across month boundaries.
+
+Separate chat sessions were opened for each phase. The design session stayed focused on UML and class responsibilities. The algorithmic session focused on sorting, filtering, and conflict detection. The testing session focused entirely on edge cases. Keeping sessions separate meant the context window held only relevant code and questions. Mixing everything into one session would have produced suggestions informed by stale context from earlier phases.
 
 **b. Judgment and verification**
 
-The AI initially suggested storing tasks directly on the Scheduler as a flat list copied from the Owner at construction time. That would break the app: adding a new task after the Scheduler was built would not appear in the schedule.
+The AI initially suggested storing tasks directly on the Scheduler as a flat list copied from the Owner at construction time. Accepting this suggestion as-is would have broken the app: adding a new task after building the Scheduler would not appear in the schedule.
 
-The fix was to have Scheduler always call `owner.get_all_tasks()` at runtime rather than caching the list. This keeps the data source of truth in Owner and Pet, not in Scheduler.
+The fix was to have Scheduler always call `owner.get_all_tasks()` at runtime rather than caching a list at startup. This keeps the data source of truth in Owner and Pet. The verification step was running `main.py` after adding a task mid-session and confirming the new task appeared in the output.
 
 ---
 
@@ -68,21 +74,21 @@ The fix was to have Scheduler always call `owner.get_all_tasks()` at runtime rat
 
 **a. What you tested**
 
-Five behaviors were tested:
+Ten behaviors were tested across three system layers:
 
-1. `mark_complete()` sets the task's `completed` flag to True.
-2. Adding a task to a Pet increases that pet's task count.
-3. Sorting returns tasks in chronological order.
-4. Marking a daily task complete creates a new task for the next day.
-5. The Scheduler flags two tasks for the same pet at the same time as a conflict.
+Task layer: `mark_complete()` sets the completed flag. Daily recurrence produces a task dated one day forward. Weekly recurrence produces a task dated seven days forward. A once task produces no next occurrence.
 
-These tests matter because they cover the three layers of the system: data (Task), storage (Pet), and logic (Scheduler).
+Pet layer: Adding a task increases the pet's task count. Removing a task decreases it.
+
+Scheduler layer: Sorting returns tasks in chronological order. Today's schedule excludes tasks with a future due date. Filter by pet name returns only tasks for the named pet. Filter by status separates done from pending. Conflict detection flags two tasks for the same pet at the same time. Conflict detection does not flag identical times across different pets. Marking a daily task complete adds a new task for tomorrow.
+
+These tests matter because they cover all three layers independently and the interactions between them.
 
 **b. Confidence**
 
-Confidence level: 4/5 stars.
+Confidence level: 4 out of 5 stars.
 
-The core scheduling behaviors are verified. Edge cases to test next: a pet with zero tasks, an owner with zero pets, tasks with identical times across different pets (should not conflict), and weekly recurrence spanning a month boundary.
+The core scheduling behaviors are verified across both happy paths and the key edge cases. Edge cases to test in a future iteration: tasks with identical descriptions for the same pet at different times, weekly recurrence where the next date crosses a year boundary, and the behavior when an Owner has zero pets and the schedule is requested.
 
 ---
 
@@ -90,12 +96,12 @@ The core scheduling behaviors are verified. Edge cases to test next: a pet with 
 
 **a. What went well**
 
-The "CLI-first" workflow was effective. Having main.py as a fast feedback loop meant every feature was verified in the terminal before the UI was touched. Bugs appeared early when they were cheap to fix.
+The CLI-first workflow was effective. Having `main.py` as a fast feedback loop meant every feature was verified in the terminal before the UI was touched. Bugs appeared early when they were cheap to fix. The separation between data (Task, Pet, Owner) and logic (Scheduler) also made writing tests straightforward because each layer is testable in isolation, without setting up the others.
 
 **b. What you would improve**
 
-The Task `due_date` defaults to today, which means tasks added in the afternoon show up on the same day's schedule regardless of the intended start date. A proper task-creation form should always prompt for a due date.
+The Task `due_date` defaults to today, which means tasks added in the afternoon show up on the same day's schedule regardless of the intended start date. A proper task-creation form should always prompt for a due date explicitly. The conflict detector also only checks same-pet conflicts. A future version should let the owner opt into cross-pet conflict detection so they know when two pets need attention at the same time.
 
 **c. Key takeaway**
 
-The human architect's job is to hold the system's rules in their head and catch when AI suggestions violate those rules. AI writes fast. It does not track your design constraints across the whole session. Reviewing each suggestion against the class diagram before accepting it saved real debugging time.
+The human architect's job is to hold the system's rules and review each AI suggestion against the existing design before accepting it. AI writes fast and generates plausible code, but it does not track your design constraints across a whole session. Reviewing every suggestion against the class diagram before accepting it prevented at least two real bugs. Using separate chat sessions for each phase kept suggestions grounded in the right context and made the collaboration more predictable.
