@@ -20,10 +20,12 @@ A busy pet owner needs help staying consistent with pet care. They want a system
 - Filter tasks by pet name or completion status
 - Detect conflicts when two tasks for the same pet share the same time slot
 - Handle recurring tasks (daily, weekly) by auto-scheduling the next occurrence when a task is marked complete
+- Find the next available time slot for a new task given existing commitments
+- Rank all pending tasks by a weighted urgency score so the most pressing care gets done first
 
 ## Smarter Scheduling
 
-The Scheduler class adds three algorithmic behaviors beyond basic task storage:
+The Scheduler class adds five algorithmic behaviors beyond basic task storage:
 
 Sorting. Tasks are sorted by their HH:MM time string. Zero-padded 24-hour format means lexicographic sort gives correct chronological order. Tasks at the same time are broken by priority (high before medium before low).
 
@@ -32,6 +34,20 @@ Filtering. Any view can be scoped by pet name, completion status, or both. The f
 Conflict detection. The scheduler checks every task against a dictionary keyed by (pet_name, time, due_date). If the same key appears twice, it emits a plain-English warning string. The app surfaces these as yellow warning banners.
 
 Recurrence. When a daily or weekly task is marked complete, `next_occurrence()` computes the next due date with `timedelta` and adds a fresh Task object to the pet. Once tasks are never recreated.
+
+Next available slot (advanced). `find_next_available_slot(pet_name, duration_minutes, start_after)` runs a gap-detection algorithm over today's schedule for a given pet. It converts every existing task into a busy interval `[start, start + duration)`, sorts those intervals, and scans forward from `start_after` to find the first gap wide enough to fit the requested duration. This is an interval scheduling problem solved in O(n log n) time. The UI lets owners enter a desired duration and receive the earliest open slot in return.
+
+Urgency ranking (advanced). `get_urgency_ranked_tasks()` assigns each incomplete task a numeric urgency score using three weighted signals: priority (high=3, medium=2, low=1), overdue penalty (days overdue times 2, capped at 10), and frequency urgency (daily=1, weekly=0.5, once=0). Tasks are sorted descending by score. A low-priority task overdue by five days scores 11 and outranks a fresh high-priority task scoring 3. The UI shows a ranked table so owners know what needs attention most even when they have limited time.
+
+## How Agent Mode was used
+
+Agent Mode in VS Code Copilot drove the implementation of both advanced algorithms.
+
+For the next available slot finder, the prompt given to Agent Mode was: "I have a Scheduler class with access to a pet's tasks for today. Each task has a time string in HH:MM format and a duration_minutes integer. Write a method that finds the earliest available time slot after a given start time that can fit a task of a given duration. Treat existing tasks as busy intervals and scan for gaps."
+
+Agent Mode generated the interval-conversion helpers `_to_minutes` and `_to_hhmm`, the gap-scanning loop, and the edge-case handling for when the day is full. The initial output used a 23:59 end-of-day boundary. That was changed to 1440 minutes (24 * 60) so a task starting at 23:30 with a 30-minute duration is correctly rejected rather than allowed to wrap past midnight.
+
+For urgency ranking, the prompt was: "Write a method that scores each incomplete task by priority, how many days overdue it is, and how frequently it recurs. Return tasks sorted from highest to lowest urgency." Agent Mode produced the scoring formula and the sort. The overdue penalty was uncapped in the initial version. A cap of 10 was added manually so a task that is 30 days overdue does not dominate the ranking to the point where all other context is lost.
 
 ## Setup
 
@@ -122,6 +138,8 @@ classDiagram
         +filter_tasks(pet_name, completed) List~Task~
         +detect_conflicts() List~str~
         +mark_task_complete(task, pet)
+        +find_next_available_slot(pet_name, duration, start_after) str
+        +get_urgency_ranked_tasks() List~tuple~
     }
 
     Owner "1" --> "*" Pet : owns

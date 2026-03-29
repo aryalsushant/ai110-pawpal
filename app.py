@@ -216,3 +216,71 @@ else:
         for t in filtered_sorted
     ]
     st.table(filter_rows)
+
+# ---------------------------------------------------------------------------
+# Urgency ranking
+# ---------------------------------------------------------------------------
+
+st.divider()
+st.subheader("Urgency Ranking")
+st.caption(
+    "Tasks scored by priority weight + overdue penalty + frequency urgency. "
+    "Higher score = needs attention sooner."
+)
+
+ranked = scheduler.get_urgency_ranked_tasks()
+if not ranked:
+    st.info("No pending tasks to rank.")
+else:
+    rank_rows = [
+        {
+            "Score": f"{score:.1f}",
+            "Pet": task.pet_name,
+            "Task": task.description,
+            "Priority": task.priority,
+            "Due": str(task.due_date),
+            "Frequency": task.frequency,
+        }
+        for task, score in ranked
+    ]
+    st.table(rank_rows)
+
+# ---------------------------------------------------------------------------
+# Next available slot finder
+# ---------------------------------------------------------------------------
+
+st.divider()
+st.subheader("Find Next Available Slot")
+st.caption("Finds the earliest gap in a pet's today schedule that fits your task.")
+
+if not pets:
+    st.info("Add a pet first.")
+else:
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        slot_pet = st.selectbox("Pet", [p.name for p in pets], key="slot_pet")
+    with col2:
+        slot_duration = st.number_input(
+            "Task duration (min)", min_value=1, max_value=240, value=30, key="slot_dur"
+        )
+    with col3:
+        slot_start = st.text_input("Search from (HH:MM)", value="00:00", key="slot_start")
+
+    if st.button("Find slot"):
+        parts = slot_start.strip().split(":")
+        if len(parts) != 2 or not all(p.isdigit() for p in parts):
+            st.error("Enter time in HH:MM format.")
+        else:
+            result = scheduler.find_next_available_slot(
+                slot_pet, int(slot_duration), slot_start.strip()
+            )
+            if result:
+                st.success(
+                    f"Next available {int(slot_duration)}-minute slot for "
+                    f"{slot_pet}: {result}"
+                )
+            else:
+                st.warning(
+                    f"No {int(slot_duration)}-minute gap found for {slot_pet} "
+                    f"after {slot_start.strip()} today."
+                )

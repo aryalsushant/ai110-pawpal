@@ -180,3 +180,91 @@ class Scheduler:
         next_task = task.next_occurrence()
         if next_task is not None:
             pet.add_task(next_task)
+
+    # ------------------------------------------------------------------
+    # Advanced algorithms
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _to_minutes(time_str: str) -> int:
+        """Convert a 'HH:MM' string to minutes since midnight."""
+        h, m = time_str.split(":")
+        return int(h) * 60 + int(m)
+
+    @staticmethod
+    def _to_hhmm(minutes: int) -> str:
+        """Convert minutes since midnight to a zero-padded 'HH:MM' string."""
+        return f"{minutes // 60:02d}:{minutes % 60:02d}"
+
+    def find_next_available_slot(
+        self,
+        pet_name: str,
+        duration_minutes: int,
+        start_after: str = "00:00",
+    ) -> Optional[str]:
+        """Return the earliest HH:MM slot on today's schedule that fits duration_minutes.
+
+        The algorithm collects all of today's tasks for the named pet, converts
+        each into a busy interval [start, start + duration), then scans the day
+        from start_after onward for the first gap large enough to fit the
+        requested duration. Returns None if no gap exists before midnight.
+        """
+        today = date.today()
+        pet_tasks = [
+            t for t in self.owner.get_all_tasks()
+            if t.pet_name == pet_name and t.due_date == today
+        ]
+
+        # Build sorted list of busy intervals (start_min, end_min)
+        busy: List[tuple[int, int]] = sorted(
+            (self._to_minutes(t.time), self._to_minutes(t.time) + t.duration_minutes)
+            for t in pet_tasks
+        )
+
+        cursor = self._to_minutes(start_after)
+        end_of_day = 24 * 60  # 1440 minutes
+
+        for interval_start, interval_end in busy:
+            # Gap between cursor and this interval's start
+            if cursor + duration_minutes <= interval_start:
+                return self._to_hhmm(cursor)
+            # Advance cursor past this interval
+            cursor = max(cursor, interval_end)
+
+        # Check gap after the last interval
+        if cursor + duration_minutes <= end_of_day:
+            return self._to_hhmm(cursor)
+
+        return None
+
+    def get_urgency_ranked_tasks(self) -> List[tuple["Task", float]]:
+        """Return all incomplete tasks ranked by a weighted urgency score.
+
+        Score formula:
+          priority_weight  (high=3, medium=2, low=1)
+          + overdue_bonus  (days overdue * 2, capped at 10)
+          + frequency_weight (daily=1.0, weekly=0.5, once=0.0)
+
+        Higher scores mean the task needs attention sooner. Only incomplete
+        tasks are included. Returns a list of (task, score) tuples, highest
+        score first.
+        """
+        priority_weight = {"high": 3, "medium": 2, "low": 1}
+        frequency_weight = {"daily": 1.0, "weekly": 0.5, "once": 0.0}
+        today = date.today()
+
+        scored: List[tuple[Task, float]] = []
+        for task in self.owner.get_all_tasks():
+            if task.completed:
+                continue
+            days_overdue = max(0, (today - task.due_date).days)
+            overdue_bonus = min(days_overdue * 2, 10)
+            score = (
+                priority_weight.get(task.priority, 1)
+                + overdue_bonus
+                + frequency_weight.get(task.frequency, 0.0)
+            )
+            scored.append((task, score))
+
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return scored
