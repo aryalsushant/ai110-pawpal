@@ -105,3 +105,9 @@ The Task `due_date` defaults to today, which means tasks added in the afternoon 
 **c. Key takeaway**
 
 The human architect's job is to hold the system's rules and review each AI suggestion against the existing design before accepting it. AI writes fast and generates plausible code, but it does not track your design constraints across a whole session. Reviewing every suggestion against the class diagram before accepting it prevented at least two real bugs. Using separate chat sessions for each phase kept suggestions grounded in the right context and made the collaboration more predictable.
+
+---
+
+## 6. Challenge 1: Advanced Algorithmic Capability
+
+I added two advanced algorithms to the Scheduler class using Agent Mode. For the first, I prompted: "Write a method that finds the earliest available time slot for a new task given a pet's existing tasks as busy intervals." Agent Mode generated a gap-scanning loop that converts each task into a `[start, start + duration)` interval, sorts them, and advances a cursor until it finds a gap wide enough. I changed the end-of-day boundary from 1439 to 1440 minutes so tasks ending exactly at midnight are correctly rejected. For the second, I prompted: "Score each incomplete task by priority, days overdue, and recurrence frequency, then sort by urgency." The formula it produced was correct, but the overdue penalty was uncapped. I added a cap of 10 so a month-old task does not completely bury everything else in the ranking. Both methods are tested and wired into the Streamlit UI.
